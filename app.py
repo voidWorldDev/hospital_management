@@ -226,20 +226,119 @@ def settings():
                 flash("Password changed successfully!", "success")
         return redirect(url_for("settings"))
     return render_template("settings.html")
-
-
-# ------------------ Dashboards (unchanged) ------------------
-@app.route("/admin/dashboard")
+@app.route("/admin/appointment/edit/<int:appt_id>", methods=["GET", "POST"])
 @login_required
-def admin_dashboard():
+def update_appointment(appt_id):
     if current_user.role != "admin":
         abort(403)
+    
+    appt = Appointment.query.get_or_404(appt_id)
+    
+    if request.method == "POST":
+        try:
+            new_date = datetime.strptime(request.form["date"], "%Y-%m-%d").date()
+            new_time = datetime.strptime(request.form["time"], "%H:%M").time()
+            new_status = request.form["status"]
+            doctor_id = int(request.form["doctor_id"])
+            patient_id = int(request.form["patient_id"])
+        except (ValueError, KeyError):
+            flash("Invalid form data.", "danger")
+            return redirect(url_for("update_appointment", appt_id=appt_id))
+        
+        # Optional: check slot availability if date/time changed
+        if (new_date != appt.date or new_time != appt.time or doctor_id != appt.doctor_id):
+            conflict = Appointment.query.filter(
+                Appointment.doctor_id == doctor_id,
+                Appointment.date == new_date,
+                Appointment.time == new_time,
+                Appointment.id != appt_id  # exclude current appointment
+            ).first()
+            if conflict:
+                flash("This time slot is already booked for the selected doctor.", "danger")
+                return redirect(url_for("update_appointment", appt_id=appt_id))
+        
+        # Update fields
+        appt.date = new_date
+        appt.time = new_time
+        appt.status = new_status
+        appt.doctor_id = doctor_id
+        appt.patient_id = patient_id
+        
+        db.session.commit()
+        flash("Appointment updated successfully!", "success")
+        return redirect(url_for("manage_appointments"))
+    
+    # GET request → show form
+    doctors = DoctorProfile.query.all()
+    patients = PatientProfile.query.all()
     return render_template(
-        "admin_dashboard.html",
-        doctors=DoctorProfile.query.all(),
-        patients=PatientProfile.query.all(),
-        appointments=Appointment.query.all()
+        "edit_appointment.html",
+        appt=appt,
+        doctors=doctors,
+        patients=patients
     )
+@app.route("/admin/appointment/delete/<int:appt_id>")
+@login_required
+def delete_appointment(appt_id):
+    if current_user.role != "admin":
+        abort(403)
+    
+    appt = Appointment.query.get_or_404(appt_id)
+    db.session.delete(appt)
+    db.session.commit()
+    flash("Appointment deleted.", "success")
+    return redirect(url_for("manage_appointments"))
+@app.route("/admin/delete_patient/<int:patient_id>")
+@login_required
+def delete_patient(patient_id):
+    if current_user.role != "admin":
+        abort(403)
+    
+    patient = PatientProfile.query.get_or_404(patient_id)
+    user = patient.user
+    
+    # Optional: delete associated appointments?
+    # Appointment.query.filter_by(patient_id=patient.id).delete()
+    
+    db.session.delete(patient)
+    db.session.delete(user)
+    db.session.commit()
+    
+    flash("Patient deleted successfully!", "success")
+    return redirect(url_for("manage_patients"))
+@app.route("/admin/patient/edit/<int:patient_id>", methods=["GET", "POST"])
+@login_required
+def edit_patient(patient_id):
+    if current_user.role != "admin":
+        abort(403)
+    
+    patient = PatientProfile.query.get_or_404(patient_id)
+    
+    if request.method == "POST":
+        # Update User info
+        patient.user.name = request.form["name"]
+        patient.user.username = request.form["username"]
+        
+        # Optional: allow password change
+        new_password = request.form.get("password")
+        if new_password and len(new_password) >= 6:
+            patient.user.password_hash = generate_password_hash(new_password)
+        
+        # Update PatientProfile fields
+        patient.email = request.form["email"]
+        patient.contact = request.form["contact"]
+        patient.address = request.form["address"]
+        try:
+            patient.dob = datetime.strptime(request.form["dob"], "%Y-%m-%d").date()
+        except ValueError:
+            flash("Invalid date format.", "danger")
+            return redirect(url_for("edit_patient", patient_id=patient_id))
+        
+        db.session.commit()
+        flash("Patient updated successfully!", "success")
+        return redirect(url_for("manage_patients"))
+    
+    return render_template("edit_patient.html", patient=patient)
 
 @app.route("/doctor/dashboard")
 @login_required
@@ -288,218 +387,183 @@ def patient_dashboard():
         doctors=doctors,
         tomorrow=tomorrow
     )
-
-
-# ------------------ Admin Management Pages ------------------
-@app.route("/admin/doctors")
+# ------------------ Dashboards (unchanged) ------------------
+@app.route("/admin/dashboard")
 @login_required
-def manage_doctors():
-    if current_user.role != "admin": abort(403)
-    return render_template("manage_doctors.html", doctors=DoctorProfile.query.all())
-
-@app.route("/admin/patients")
-@login_required
-def manage_patients():
-    if current_user.role != "admin": abort(403)
-    return render_template("manage_patients.html", patients=PatientProfile.query.all())
-
-@app.route("/admin/manage_appointments")
-@login_required
-def manage_appointments():
-    if current_user.role != "admin": abort(403)
+def admin_dashboard():
+    if current_user.role != "admin":
+        abort(403)
     return render_template(
-        "manage_appointments.html",
-        appointments=Appointment.query.order_by(Appointment.date, Appointment.time).all(),
+        "admin_dashboard.html",
         doctors=DoctorProfile.query.all(),
         patients=PatientProfile.query.all(),
-        tomorrow=(datetime.today() + timedelta(days=1)).date()
-    )
-
-@app.route("/admin/add_appointment", methods=["POST"])
-
-
-
-@login_required
-
-
-def add_appointment():
-
-
-    if current_user.role != "admin":
-
-
-        abort(403)
-
-
-    doctor_id = request.form["doctor_id"]
-
-
-    patient_id = request.form["patient_id"]
-
-
-    date_str = request.form["date"]
-
-
-    time_str = request.form["time"]
-
-
-
-
-
-    appt_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-
-
-    appt_time = datetime.strptime(time_str, "%H:%M").time()
-
-
-
-
-
-    doctor = DoctorProfile.query.get(doctor_id)
-
-
-    if not can_schedule(doctor, appt_date, appt_time):
-
-
-        flash("Slot not available or already booked!", "danger")
-
-
-        return redirect(url_for("manage_appointments"))
-
-
-
-
-
-    appt = Appointment(
-
-
-        doctor_id=doctor_id, patient_id=patient_id,
-
-
-        date=appt_date, time=appt_time
-
-
+        appointments=Appointment.query.all()
     )
 
 
-    db.session.add(appt)
 
-
-    db.session.commit()
-
-
-    flash("Appointment booked!", "success")
-
-
-    return redirect(url_for("manage_appointments"))
-
-
-# ------------------ Doctor Appointment Actions ------------------
-@app.route("/doctor/confirm/<int:appt_id>")
+# ------------------ Manage Doctors ------------------
+@app.route("/admin/doctor/manage")
 @login_required
-def confirm_appointment(appt_id):
-    if current_user.role != "doctor": abort(403)
-    appt = Appointment.query.get_or_404(appt_id)
-    if appt.doctor_id != current_user.doctor.id: abort(403)
-    appt.status = "confirmed"
-    db.session.commit()
-    flash("Appointment confirmed!", "success")
-    return redirect(url_for("doctor_dashboard"))
-
-@app.route("/doctor/reject/<int:appt_id>")
-@login_required
-def reject_appointment(appt_id):
-    if current_user.role != "doctor": abort(403)
-    appt = Appointment.query.get_or_404(appt_id)
-    if appt.doctor_id != current_user.doctor.id: abort(403)
-    appt.status = "rejected"
-    db.session.commit()
-    flash("Appointment rejected.", "warning")
-    return redirect(url_for("doctor_dashboard"))
-
-
-# ------------------ FIXED & IMPROVED ADMIN ADD ------------------
-@app.route("/admin/doctor/add", methods=["GET", "POST"], endpoint="add_doctor")
-@app.route("/admin/patient/add", methods=["GET", "POST"], endpoint="add_patient")
-@login_required
-def admin_add_entity():
+def manage_doctors():
     if current_user.role != "admin":
         abort(403)
+    doctors = DoctorProfile.query.all()
+    return render_template("manage_doctors.html", doctors=doctors)
 
-    entity = "doctor" if "doctor" in request.path else "patient"
 
+@app.route("/admin/doctor/add", methods=["GET", "POST"])
+@login_required
+def add_doctor():
+    if current_user.role != "admin":
+        abort(403)
     if request.method == "POST":
-        username = request.form["username"].strip().lower()
-        if User.query.filter_by(username=username).first():
-            flash("Username already taken.", "danger")
-            return redirect(request.url)
+        name = request.form["name"]
+        username = request.form["username"]
+        password = request.form["password"]
+        specialization = request.form["specialization"]
+        availability = request.form.get("availability", "{}")
 
+        # Create User
         user = User(
             username=username,
-            password_hash=generate_password_hash(request.form["password"]),
-            role=entity,        # ← FIXED: was entity[:-1]
-            name=request.form["name"].strip()
+            password_hash=generate_password_hash(password),
+            role='doctor',
+            name=name,
+            profile_pic='default.jpg'
         )
         db.session.add(user)
         db.session.flush()
 
-        if entity == "doctor":
-            db.session.add(DoctorProfile(
-                specialization=request.form["specialization"].strip(),
-                user_id=user.id
-            ))
-        else:
-            try:
-                dob = datetime.strptime(request.form["dob"], "%Y-%m-%d").date()
-            except ValueError:
-                flash("Invalid date format.", "danger")
-                db.session.rollback()
-                return redirect(request.url)
-            db.session.add(PatientProfile(
-                email=request.form["email"],
-                contact=request.form["contact"],
-                address=request.form["address"],
-                dob=dob,
-                user_id=user.id
-            ))
-
+        # Create Doctor Profile
+        doctor = DoctorProfile(
+            specialization=specialization,
+            availability=availability,
+            user_id=user.id
+        )
+        db.session.add(doctor)
         db.session.commit()
-        flash(f"{entity.capitalize()} added successfully!", "success")
-        return redirect(url_for(f"manage_{entity}s"))
+        flash("Doctor added successfully!", "success")
+        return redirect(url_for("manage_doctors"))
+    return render_template("add_doctor.html")
 
-    return render_template(f"add_{entity}.html")
 
-
-# ------------------ NEW: EDIT & DELETE DOCTOR ------------------
 @app.route("/admin/doctor/edit/<int:doctor_id>", methods=["GET", "POST"])
 @login_required
 def edit_doctor(doctor_id):
     if current_user.role != "admin":
         abort(403)
     doctor = DoctorProfile.query.get_or_404(doctor_id)
-    user = doctor.user
-
     if request.method == "POST":
-        user.name = request.form["name"].strip()
-        doctor.specialization = request.form["specialization"].strip()
+        doctor.user.name = request.form["name"]
+        doctor.specialization = request.form["specialization"]
+        doctor.availability = request.form.get("availability", "{}")
         db.session.commit()
-        flash("Doctor updated successfully!", "success")
+        flash("Doctor updated!", "success")
         return redirect(url_for("manage_doctors"))
+    return render_template("edit_doctor.html", doctor=doctor)
 
-    return render_template("edit_doctor.html", user=user, doctor=doctor)
 
-
-@app.route("/admin/doctor/delete/<int:doctor_id>")
+@app.route("/admin/delete_doctor/<int:doctor_id>")
 @login_required
 def delete_doctor(doctor_id):
     if current_user.role != "admin":
         abort(403)
     doctor = DoctorProfile.query.get_or_404(doctor_id)
-    db.session.delete(doctor.user)   # delete User first (cascade issue)
+    user = doctor.user
     db.session.delete(doctor)
+    db.session.delete(user)
     db.session.commit()
-    flash("Doctor deleted successfully.", "success")
+    flash("Doctor deleted!", "success")
     return redirect(url_for("manage_doctors"))
+
+
+# ------------------ Manage Patients ------------------
+@app.route("/admin/patients")
+@login_required
+def manage_patients():
+    if current_user.role != "admin":
+        abort(403)
+    patients = PatientProfile.query.all()
+    return render_template("manage_patients.html", patients=patients)
+
+
+@app.route("/admin/patients/add", methods=["GET", "POST"])
+@login_required
+def add_patient():
+    if current_user.role != "admin":
+        abort(403)
+    if request.method == "POST":
+        name = request.form["name"]
+        username = request.form["username"]
+        password = request.form["password"]
+        email = request.form["email"]
+        contact = request.form["contact"]
+        address = request.form["address"]
+        dob_str = request.form["dob"]
+        dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
+
+        user = User(
+            username=username,
+            password_hash=generate_password_hash(password),
+            role='patient',
+            name=name,
+            profile_pic='default.jpg'
+        )
+        db.session.add(user)
+        db.session.flush()
+
+        patient = PatientProfile(
+            email=email, contact=contact, address=address, dob=dob, user_id=user.id
+        )
+        db.session.add(patient)
+        db.session.commit()
+        flash("Patient added!", "success")
+        return redirect(url_for("manage_patients"))
+    return render_template("add_patient.html")
+
+
+# ------------------ Manage Appointments ------------------
+@app.route("/admin/manage_appointments")
+@login_required
+def manage_appointments():
+    if current_user.role != "admin":
+        abort(403)
+    appointments = Appointment.query.all()
+    doctors = DoctorProfile.query.all()
+    patients = PatientProfile.query.all()
+    return render_template(
+        "manage_appointments.html",
+        appointments=appointments, doctors=doctors, patients=patients
+    )
+
+
+@app.route("/admin/add_appointment", methods=["POST"])
+@login_required
+def add_appointment():
+    if current_user.role != "admin":
+        abort(403)
+    doctor_id = request.form["doctor_id"]
+    patient_id = request.form["patient_id"]
+    date_str = request.form["date"]
+    time_str = request.form["time"]
+
+    appt_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    appt_time = datetime.strptime(time_str, "%H:%M").time()
+
+    doctor = DoctorProfile.query.get(doctor_id)
+    if not can_schedule(doctor, appt_date, appt_time):
+        flash("Slot not available or already booked!", "danger")
+        return redirect(url_for("manage_appointments"))
+
+    appt = Appointment(
+        doctor_id=doctor_id, patient_id=patient_id,
+        date=appt_date, time=appt_time
+    )
+    db.session.add(appt)
+    db.session.commit()
+    flash("Appointment booked!", "success")
+    return redirect(url_for("manage_appointments"))
 
 
 # ------------------ Run App ------------------
