@@ -1,24 +1,116 @@
 {% extends "base.html" %}
 {% block content %}
+
 <h2 class="mb-4">Patient Dashboard</h2>
 
-<h4>Upcoming Appointments</h4>
-<table class="table table-striped">
-  <thead>
-    <tr><th>ID</th><th>Doctor</th><th>Date</th><th>Time</th><th>Status</th></tr>
-  </thead>
-  <tbody>
-    {% for appt in appointments %}
-    <tr>
-      <td>{{ appt.id }}</td>
-      <td>{{ appt.doctor_id }}</td>
-      <td>{{ appt.date }}</td>
-      <td>{{ appt.time }}</td>
-      <td>{{ appt.status }}</td>
-    </tr>
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
     {% endfor %}
-  </tbody>
-</table>
+  {% endif %}
+{% endwith %}
 
-<a href="{{ url_for('book_appointment') }}" class="btn btn-primary mt-2">Book Appointment</a>
+<div class="row g-4">
+  <!-- Upcoming Appointments -->
+  <div class="col-lg-8">
+    <h4 class="mb-3">Upcoming Appointments</h4>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover align-middle">
+        <thead class="table-primary">
+          <tr>
+            <th>#</th>
+            <th>Doctor</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for appt in appointments %}
+          <tr>
+            <td>{{ appt.id }}</td>
+            <td><strong>Dr. {{ appt.doctor.user.name }}</strong></td>
+            <td>{{ appt.date.strftime('%b %d, %Y') }}</td>
+            <td>{{ appt.time.strftime('%I:%M %p') }}</td>
+            <td>
+              {% if appt.status == 'pending' %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% elif appt.status == 'confirmed' %}
+                <span class="badge bg-success">Confirmed</span>
+              {% elif appt.status == 'Completed' %}
+                <span class="badge bg-secondary">Completed</span>
+              {% else %}
+                <span class="badge bg-info">{{ appt.status|capitalize }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center py-5 text-muted">
+              <em>No appointments booked yet.</em>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Book New Appointment Card -->
+  <div class="col-lg-4">
+    <div class="card border-primary shadow-sm h-100">
+      <div class="card-header bg-primary text-white text-center">
+        <h5 class="mb-0">Book New Appointment</h5>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('patient_dashboard') }}">
+          <!-- Doctor Selection -->
+          <div class="mb-3">
+            <label class="form-label fw-bold">Doctor</label>
+            <select name="doctor_id" class="form-select" required>
+              <option value="">-- Select Doctor --</option>
+              {% for doctor in doctors %}
+                <option value="{{ doctor.id }}">
+                  Dr. {{ doctor.user.name }} ({{ doctor.specialization }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Date Picker (Tomorrow onwards) -->
+          <div class="mb-3">
+            <label class="form-label fw-bold">Date</label>
+            <input type="date"
+                   name="date"
+                   class="form-control"
+                   min="{{ tomorrow.strftime('%Y-%m-%d') }}"
+                   required>
+          </div>
+
+          <!-- Time Slots -->
+          <div class="mb-4">
+            <label class="form-label fw-bold">Time</label>
+            <select name="time" class="form-select" required>
+              <option value="" disabled selected>-- Select Time --</option>
+              {% for h in range(9, 18) %}
+                <option value="{{ '%02d:00'|format(h) }}">{{ '%02d:00'|format(h) }} ({{ h if h < 13 else h-12 }}:00 {{ 'AM' if h < 12 else 'PM' }})</option>
+                <option value="{{ '%02d:30'|format(h) }}">{{ '%02d:30'|format(h) }} ({{ h if h < 13 else h-12 }}:30 {{ 'AM' if h < 12 else 'PM' }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100">
+            Book Appointment
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
