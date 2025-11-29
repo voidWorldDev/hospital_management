@@ -104,27 +104,130 @@ def load_user(user_id):
 def index():
     return redirect(url_for("login"))
 
+#-------------------Register------------
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    # Prevent logged-in users from accessing register
+    if current_user.is_authenticated:
+        return redirect(url_for("patient_dashboard" if current_user.role == "patient" else
+                                "doctor_dashboard" if current_user.role == "doctor" else
+                                "admin_dashboard"))
 
-# ------------------ Login / Logout ------------------
+    if request.method == "POST":
+        name = request.form["name"].strip()
+        username = request.form["username"].strip().lower()
+        password = request.form["password"]
+        role = request.form["role"]  # coming from form
+
+        # SECURITY: Only allow patient and doctor to register publicly
+        if role not in ["patient", "doctor"]:
+            flash("Invalid role selected.", "danger")
+            return redirect(url_for("register"))
+
+        # Check if username already exists
+        if User.query.filter_by(username=username).first():
+            flash("Username already taken. Please choose another.", "danger")
+            return redirect(url_for("register"))
+
+        # Basic validation
+        if len(password) < 6:
+            flash("Password must be at least 6 characters.", "danger")
+            return redirect(url_for("register"))
+
+        # Create the user
+        user = User(
+            username=username,
+            password_hash=generate_password_hash(password),
+            role=role,
+            name=name,
+            profile_pic="default.jpg"
+        )
+        db.session.add(user)
+        db.session.flush()  # To get user.id
+
+        # Create role-specific profile
+        if role == "doctor":
+            specialization = request.form.get("specialization", "").strip()
+            if not specialization:
+                flash("Specialization is required for doctors.", "danger")
+                db.session.rollback()
+                return redirect(url_for("register"))
+
+            doctor_profile = DoctorProfile(
+                specialization=specialization,
+                availability="{}",  # empty JSON
+                user_id=user.id
+            )
+            db.session.add(doctor_profile)
+
+        elif role == "patient":
+            email = request.form["email"].strip()
+            contact = request.form["contact"].strip()
+            address = request.form["address"].strip()
+            dob_str = request.form["dob"]
+
+            if PatientProfile.query.filter_by(email=email).first():
+                flash("This email is already registered.", "danger")
+                db.session.rollback()
+                return redirect(url_for("register"))
+
+            try:
+                dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Invalid date format.", "danger")
+                return redirect(url_for("register"))
+
+            patient_profile = PatientProfile(
+                email=email,
+                contact=contact,
+                address=address,
+                dob=dob,
+                user_id=user.id
+            )
+            db.session.add(patient_profile)
+
+        # Commit everything
+        db.session.commit()
+
+        # AUTO LOGIN THE USER AFTER REGISTRATION
+        login_user(user)
+        flash(f"Welcome, {name}! Your account has been created successfully.", "success")
+
+        # Redirect based on role
+        if role == "doctor":
+            return redirect(url_for("doctor_dashboard"))
+        else:
+            return redirect(url_for("patient_dashboard"))
+
+    # GET request - show form
+    return render_template("register.html")# ------------------ Login / Logout ------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        user = User.query.filter_by(username=username).first()
-
-        if user and check_password_hash(user.password_hash, password):
-            login_user(user)
-            flash("Logged in successfully!", "success")
-            if user.role == 'admin':
-                return redirect(url_for("admin_dashboard"))
-            elif user.role == 'doctor':
-                return redirect(url_for("doctor_dashboard"))
-            else:
-                return redirect(url_for("patient_dashboard"))
+    if current_user.is_authenticated:
+        if current_user.role == 'admin':
+            return redirect(url_for("admin_dashboard"))
+        elif current_user.role == 'doctor':
+            return redirect(url_for("doctor_dashboard"))
         else:
-            flash("Invalid username or password", "danger")
-    return render_template("login.html")
+            return redirect(url_for("patient_dashboard"))
+    else:
+        if request.method == "POST":
+            username = request.form["username"]
+            password = request.form["password"]
+            user = User.query.filter_by(username=username).first()
+
+            if user and check_password_hash(user.password_hash, password):
+                login_user(user)
+                flash("Logged in successfully!", "success")
+                if user.role == 'admin':
+                    return redirect(url_for("admin_dashboard"))
+                elif user.role == 'doctor':
+                    return redirect(url_for("doctor_dashboard"))
+                else:
+                    return redirect(url_for("patient_dashboard"))
+            else:
+                flash("Invalid username or password", "danger")
+        return render_template("login.html")
 
 
 @app.route("/logout")
@@ -477,7 +580,7 @@ if __name__ == "__main__":
         if not User.query.filter_by(username="admin").first():
             admin = User(
                 username="admin",
-                password_hash=generate_password_hash("admin@123"),
+                password_hash=generate_password_hash("admin123"),
                 role="admin",
                 name="Administrator",
                 profile_pic="default.jpg"

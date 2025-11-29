@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Register - Hospital Management{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
+                    <h2 class="text-center mb-4 text-primary fw-bold">Create Account</h2>
+
+                    <!-- Flash Messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" novalidate>
+                        <!-- Name -->
+                        <div class="mb-3">
+                            <label for="name" class="form-label fw-bold">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" id="name" class="form-control" required placeholder="John Doe">
+                        </div>
+
+                        <!-- Username -->
+                        <div class="mb-3">
+                            <label for="username" class="form-label fw-bold">Username <span class="text-danger">*</span></label>
+                            <input type="text" name="username" id="username" class="form-control" required placeholder="john_doe123">
+                        </div>
+
+                        <!-- Password -->
+                        <div class="mb-3">
+                            <label for="password" class="form-label fw-bold">Password <span class="text-danger">*</span></label>
+                            <input type="password" name="password" id="password" class="form-control" required minlength="6"
+                                   placeholder="At least 6 characters">
+                        </div>
+
+                        <!-- Role Selection -->
+                        <div class="mb-3">
+                            <label for="role" class="form-label fw-bold">I am registering as <span class="text-danger">*</span></label>
+                            <select name="role" id="role" class="form-select" required onchange="toggleRoleFields()">
+                                <option value="">-- Select Role --</option>
+                                <option value="patient">Patient</option>
+                                <option value="doctor">Doctor</option>
+                                <!-- ADMIN OPTION REMOVED FOR SECURITY -->
+                            </select>
+                        </div>
+
+                        <!-- Doctor Fields -->
+                        <div id="doctorFields" style="display: none;" class="border rounded p-4 bg-light">
+                            <h5 class="text-primary mb-3">Doctor Information</h5>
+                            <div class="mb-3">
+                                <label for="specialization" class="form-label fw-bold">Specialization <span class="text-danger">*</span></label>
+                                <input type="text" name="specialization" id="specialization" class="form-control"
+                                       placeholder="e.g. Cardiologist, Neurologist, Pediatrician">
+                            </div>
+                        </div>
+
+                        <!-- Patient Fields -->
+                        <div id="patientFields" style="display: none;" class="border rounded p-4 bg-light">
+                            <h5 class="text-primary mb-3">Patient Information</h5>
+
+                            <div class="mb-3">
+                                <label for="email" class="form-label fw-bold">Email Address <span class="text-danger">*</span></label>
+                                <input type="email" name="email" id="email" class="form-control" placeholder="you@example.com">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="contact" class="form-label fw-bold">Contact Number <span class="text-danger">*</span></label>
+                                <input type="text" name="contact" id="contact" class="form-control" placeholder="+1234567890">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="address" class="form-label fw-bold">Address <span class="text-danger">*</span></label>
+                                <textarea name="address" id="address" class="form-control" rows="2" placeholder="123 Main St, City"></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="dob" class="form-label fw-bold">Date of Birth <span class="text-danger">*</span></label>
+                                <input type="date" name="dob" id="dob" class="form-control" max="{{ today }}">
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary btn-lg w-100 mt-4 fw-bold">
+                            Create Account
+                        </button>
+                    </form>
+
+                    <div class="text-center mt-4">
+                        <p class="text-muted">Already have an account? 
+                            <a href="{{ url_for('login') }}" class="text-primary fw-bold">Login here</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleRoleFields() {
+    const role = document.getElementById("role").value;
+    document.getElementById("doctorFields").style.display = (role === "doctor") ? "block" : "none";
+    document.getElementById("patientFields").style.display = (role === "patient") ? "block" : "none";
+
+    // Make fields required dynamically
+    document.querySelectorAll('#doctorFields input, #patientFields input, #patientFields textarea').forEach(field => {
+        field.required = (role === "doctor" || role === "patient");
+    });
+}
+
+// Optional: Set today's date as max for DOB
+document.addEventListener("DOMContentLoaded", () => {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById("dob").setAttribute("max", today);
+});
+</script>
+{% endblock %}
