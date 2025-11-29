@@ -315,6 +315,84 @@ def manage_appointments():
         tomorrow=(datetime.today() + timedelta(days=1)).date()
     )
 
+@app.route("/admin/add_appointment", methods=["POST"])
+
+
+
+@login_required
+
+
+def add_appointment():
+
+
+    if current_user.role != "admin":
+
+
+        abort(403)
+
+
+    doctor_id = request.form["doctor_id"]
+
+
+    patient_id = request.form["patient_id"]
+
+
+    date_str = request.form["date"]
+
+
+    time_str = request.form["time"]
+
+
+
+
+
+    appt_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+
+    appt_time = datetime.strptime(time_str, "%H:%M").time()
+
+
+
+
+
+    doctor = DoctorProfile.query.get(doctor_id)
+
+
+    if not can_schedule(doctor, appt_date, appt_time):
+
+
+        flash("Slot not available or already booked!", "danger")
+
+
+        return redirect(url_for("manage_appointments"))
+
+
+
+
+
+    appt = Appointment(
+
+
+        doctor_id=doctor_id, patient_id=patient_id,
+
+
+        date=appt_date, time=appt_time
+
+
+    )
+
+
+    db.session.add(appt)
+
+
+    db.session.commit()
+
+
+    flash("Appointment booked!", "success")
+
+
+    return redirect(url_for("manage_appointments"))
+
 
 # ------------------ Doctor Appointment Actions ------------------
 @app.route("/doctor/confirm/<int:appt_id>")
