@@ -1,5 +1,4 @@
 import os
-import secrets
 from datetime import datetime, timedelta
 from flask import (
     Flask, render_template, redirect, url_for, flash, request, abort
@@ -11,12 +10,14 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-
+import os 
+from dotenv import load_dotenv
+load_dotenv()
 # ------------------ App Configuration ------------------
 app = Flask(__name__)
 app.config.update(
-    SECRET_KEY=secrets.token_hex(32),
-    SQLALCHEMY_DATABASE_URI="sqlite:///hospital.db",
+    SECRET_KEY=os.getenv("SECRET_KEY"),
+    SQLALCHEMY_DATABASE_URI=os.getenv("SQLALCHEMY_DATABASE_URI"),
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     MAX_CONTENT_LENGTH=2 * 1024 * 1024,  # 2 MB
     UPLOAD_FOLDER=os.path.join('static', 'uploads')
